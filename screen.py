@@ -104,7 +104,9 @@ def main():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(DC, GPIO.OUT)
     GPIO.setup(RST, GPIO.OUT)
-    GPIO.setup(CS, GPIO.OUT)
+    # The luma.lcd driver handles the Chip Select line through spidev
+    # so manual setup via RPi.GPIO is unnecessary and can cause errors.
+    # GPIO.setup(CS, GPIO.OUT)
     GPIO.setup(BL, GPIO.OUT)
     GPIO.output(BL, GPIO.HIGH)  # Backlight ON
 
