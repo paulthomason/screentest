@@ -1,5 +1,5 @@
-import spidev
 import RPi.GPIO as GPIO
+from luma.core.interface.serial import spi as luma_spi, noop as luma_noop
 import time
 from PIL import Image, ImageDraw
 import logging
@@ -42,19 +42,18 @@ ST7735_RAMWR   = 0x2C
 ST7735_MADCTL  = 0x36
 ST7735_COLMOD  = 0x3A
 
-def write_command(spi, cmd):
-    GPIO.output(DC, GPIO.LOW)
-    GPIO.output(CS, GPIO.LOW)
-    spi.writebytes([cmd])
-    GPIO.output(CS, GPIO.HIGH)
+def write_command(spi_interface, cmd):
+    """Send a command byte using the luma SPI interface."""
+    # Chip Select is managed by the SPI interface
+    spi_interface.command(cmd)
     logging.debug(f"Sent command: 0x{cmd:02X}")
 
-def write_data(spi, data):
-    GPIO.output(DC, GPIO.HIGH)
-    GPIO.output(CS, GPIO.LOW)
-    spi.writebytes(data)
-    GPIO.output(CS, GPIO.HIGH)
-    logging.debug(f"Sent data: {data[:16]}... ({len(data)} bytes)" if len(data) > 16 else f"Sent data: {data}")
+def write_data(spi_interface, data):
+    """Send raw data bytes using the luma SPI interface."""
+    spi_interface.data(data)
+    logging.debug(
+        f"Sent data: {data[:16]}... ({len(data)} bytes)" if len(data) > 16 else f"Sent data: {data}"
+    )
 
 def lcd_init(spi):
     logging.info("Initializing LCD")
@@ -104,18 +103,15 @@ def main():
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(DC, GPIO.OUT)
     GPIO.setup(RST, GPIO.OUT)
-    # The luma.lcd driver handles the Chip Select line through spidev
-    # so manual setup via RPi.GPIO is unnecessary and can cause errors.
+    # The luma SPI interface manages the Chip Select line, so manual setup via
+    # RPi.GPIO is unnecessary and can cause errors.
     # GPIO.setup(CS, GPIO.OUT)
     GPIO.setup(BL, GPIO.OUT)
     GPIO.output(BL, GPIO.HIGH)  # Backlight ON
 
-    # SPI setup
-    spi = spidev.SpiDev()
+    # SPI setup using luma.core serial interface
     try:
-        spi.open(SPI_PORT, SPI_DEVICE)
-        spi.max_speed_hz = 4000000
-        spi.mode = 0
+        spi = luma_spi(port=SPI_PORT, device=SPI_DEVICE, bus_speed_hz=4000000, gpio=luma_noop())
         logging.info(f"SPI opened (port {SPI_PORT}, device {SPI_DEVICE})")
     except Exception as e:
         logging.exception(f"SPI open failed: {e}")
@@ -140,7 +136,7 @@ def main():
     finally:
         GPIO.output(BL, GPIO.LOW)  # Backlight OFF
         GPIO.cleanup()
-        spi.close()
+        spi.cleanup()
         logging.info("GPIO cleaned up, SPI closed, exiting.")
 
 if __name__ == "__main__":
